@@ -1,4 +1,4 @@
-function jsonCrunch (json) {
+function jsonCrunchColumn (json) {
   var data = [],
     keys = Object.keys(json),
     series = Object.keys(json[keys[0]]);
@@ -12,29 +12,33 @@ function jsonCrunch (json) {
   return data;
 }
 
-var svg = d3.select("svg"),
-    margin = {top: 20, right: 20, bottom: 100, left: 40},
-    width = +svg.attr("width") - margin.left - margin.right,
-    height = +svg.attr("height") - margin.top - margin.bottom,
-    g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+function jsonCrunchLine (json) {
+  var data = [],
+    keys = Object.keys(json),
+    series = Object.keys(json[keys[0]]),
+    seriesLength = Object.keys(json[keys[0]]).length,
+    temp;
 
-var x0 = d3.scaleBand()
-    .rangeRound([0, width])
-    .paddingInner(0.1);
+  for (var i = 0; i < keys.length; i++) {
+    data[i] = {
+      key: keys[i],
+      values: []
+    };
+    for (var j in json[keys[i]]) {
+      temp = json[keys[i]][j];
+      if (typeof temp === 'string') {
+        temp = +temp.replace('$', '');
+      }
+      data[i].values.push(temp);
+    }
+  }
+  return data;
+}
 
-var x1 = d3.scaleBand()
-    .padding(0.05);
-
-var y = d3.scaleLinear()
-    .rangeRound([height, 0]);
-
-var z = d3.scaleOrdinal()
-    .range(["#98abc5", "#8a89a6", "#7b6888"]);
-
-d3.json("data.json", function(error, json) {
+function renderColumn (error, json) {
   if (error) return coonsole.warn(error);
 
-  var data = jsonCrunch(json);
+  var data = jsonCrunchColumn(json);
 
   var series = data.map((elem) => {
     return elem.name;
@@ -58,7 +62,7 @@ d3.json("data.json", function(error, json) {
   })]).nice();
 
   // drawing the columns
-  g.append("g")
+  gColumn.append("g")
     .selectAll("g")
     .data(data)
     .enter().append("g")
@@ -86,18 +90,18 @@ d3.json("data.json", function(error, json) {
 
 
   // drawing x-axis
-  g.append("g")
+  gColumn.append("g")
     .attr("class", "axis")
     .attr("transform", "translate(0," + height + ")")
     .call(d3.axisBottom(x0));
 
   // drawing x-axis
-  g.append("g")
+  gColumn.append("g")
     .attr("class", "axis")
     .call(d3.axisLeft(y));
 
   // drawing legend
-  var legend = g.append("g")
+  var legend = gColumn.append("g")
     .attr("font-size", 10)
     // .attr("text-anchor", "end")
   .selectAll("g")
@@ -118,5 +122,96 @@ d3.json("data.json", function(error, json) {
     .attr("y", height + 50)
     .attr("dy", "0.32em")
     .text(function(d) { return d; });
+}
 
-});
+function renderLine (error, json) {
+  if (error) return coonsole.warn(error);
+
+  var line = d3.line()
+    .x(function(d, i) {return x0(series[i]); })
+    .y(function(d) {
+      if (typeof d === 'string') {
+        d = +d.replace('$', '');
+      }
+      return y(d);
+    });
+  var data = jsonCrunchLine(json);
+  var keys = Object.keys(json);
+  var series = Object.keys(json[keys[0]]);
+
+  // defining the scales
+  x0.domain(series);
+  y.domain([0, d3.max((() => {
+      var arr = [];
+      for (var i = 0; i < keys.length; i++) {
+        arr.push(d3.max(data[i].values));
+      }
+      return arr;
+    })())]).nice();
+
+  var city = gLine.selectAll(".city")
+  .data(data)
+  .enter().append("g")
+    .attr("transform", function(d, i) {  return "translate(" + x0(series[1]) / 2 + ",0)"; })
+    .attr("class", "city");
+  city.append("path")
+      .attr("class", "line")
+      .attr("d", function(d) { return line(d.values); })
+      .style('stroke', function(d, i) { return z(i); });
+
+  // drawing x-axis
+  gLine.append("g")
+    .attr("class", "axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(d3.axisBottom(x0));
+
+  // drawing x-axis
+  gLine.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y));
+
+  // drawing legend
+  var legend = gLine.append("g")
+    .attr("font-size", 10)
+    // .attr("text-anchor", "end")
+  .selectAll("g")
+  .data(keys.slice())
+  .enter().append("g")
+    .attr("transform", function(d, i) { return "translate(" + i * 100 + ", 0)"; });
+
+
+  legend.append("rect")
+    .attr("y", height + 40)
+    .attr("x", (width / 2 - (keys.length * 100 / 2)))
+    .attr("width", 19)
+    .attr("height", 19)
+    .attr("fill", z);
+
+  legend.append("text")
+    .attr("x", 20 + (width / 2 - (keys.length * 100 / 2)))
+    .attr("y", height + 50)
+    .attr("dy", "0.32em")
+    .text(function(d) { return d; });
+}
+
+var svgColumn = d3.select("#ms-column"),
+    svgLine = d3.select("#ms-column"),
+    margin = {top: 20, right: 20, bottom: 100, left: 40},
+    width = +svgColumn.attr("width") - margin.left - margin.right,
+    height = +svgColumn.attr("height") - margin.top - margin.bottom,
+    gColumn = svgColumn.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    gLine = svgLine.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var x0 = d3.scaleBand()
+    .rangeRound([0, width])
+    .paddingInner(0.1);
+
+var x1 = d3.scaleBand()
+    .padding(0.05);
+
+var y = d3.scaleLinear()
+    .rangeRound([height, 0]);
+
+var z = d3.scaleOrdinal()
+    .range(["#ff0000", "#00ff00", "#0000ff"]);
+    // .range(["#98abc5", "#8a89a6", "#7b6888"]);
